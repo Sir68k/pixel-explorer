@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Pixel Explorer</title>
+
+    <style>
+        body {
+            background-color: #eeeeee;
+            dcolor: white;
+        }
+
+        #myCanvas {
+            border:1px solid grey;
+        }
+
+        .config-tbl {
+            width: 1024px;
+        }
+
+        input[type="range"] {
+            width: 512px;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>Pixel Explorer</h1>
+
+    <input type="file" id="files" name="file" onchange="readfile()">
+
+    <br><br>
+
+    <canvas id="myCanvas" width="1024px" height="512px"></canvas>
+
+    <br>
+
+    <table class="config-tbl">
+
+        <tr>
+            <td>Offset:</td><td><input id="vo" value="0" oninput="offset.value=this.value; update()"></td>
+            <td><input type="range" min="0" max="655200" value="0" class="slider" id="offset" oninput="update()" class="slider_full"></td>
+        </tr>
+
+        <tr>
+            <td>Shift:</td><td><input id="vs" value="0" oninput="shift.value=this.value;update()"></td>
+            <td><input type="range" min="0" max="64" value="0" class="slider" id="shift" oninput="update()" class="slider_half"></td>
+        </tr>
+
+        <tr>
+            <td>Block:</td><td><input id="vb" value="8" oninput="block.value=this.value;update()"></td>
+            <td><input type="range" min="0" max="64" value="0" class="slider" id="block" oninput="update()" class="slider_half"></td>
+        </tr>
+
+        <tr>
+            <td>Reverse bit order:</td>
+            <td>
+                <input type="checkbox" id="reverse" onchange="update()">
+            </td>
+        </tr>
+
+        <tr>
+            <td>Invert colors:</td>
+            <td>
+                <input type="checkbox" id="invert" onchange="do_invert(this.checked)">
+            </td>
+        </tr>
+
+        <tr>
+            <td>Highlight printable bytes:</td>
+            <td>
+                <input type="checkbox" id="highlight" checked onchange="update();">
+            </td>
+        </tr>
+
+
+    </table>
+
+    <hr>
+
+    Simple program to explore binary files as a bunch of pixels. Perfect to find sprites, fonts, and more in classic ROMs and firmwares.
+
+    <script type="text/javascript">
+        const W = 512
+        const H = 256
+        const S = 2;
+        const PW = 4;
+
+        const BG_COLOR    = "#111111";
+        const FG_COLOR    = "#EEEEEE";
+        const ALPHA_COLOR = "#00FF00";
+        const NUM_COLOR   = "#00FFFF";
+
+        let g_data = ""
+        let c = document.getElementById("myCanvas");
+        let ctx = c.getContext("2d");
+
+        ctx.scale(S, S);
+        ctx.fillStyle = BG_COLOR;
+        ctx.fillRect(0, 0, W, H);
+
+        shift.value  = 0;
+        offset.value = 0;
+        block.value  = 8;
+
+        invert.checked    = false;
+        highlight.checked = true;
+
+        const printable_reg   = /[a-zA-Z0-9]/;
+        const printable_alpha = /[a-zA-Z]/;
+        const printable_num   = /[0-9]/;
+
+        function do_invert(inv) {
+            document.body.style.filter = inv ? "invert(1)" : "invert(0)";
+            document.body.style.backgroundColor = inv ? BG_COLOR : FG_COLOR;
+        }
+
+        function update() {
+            const shift_     = parseInt(shift.value)  || 0;
+            const offset_    = parseInt(offset.value) || 0;
+            const blocksize_ = parseInt(block.value)  || 1;
+            const reverse_   = !!reverse.checked;
+            const highlight_ = !!highlight.checked;
+
+
+            if (blocksize_ < 0)
+                blocksize_ = 1;
+
+            vs.value = shift_;
+            vo.value = offset_;
+            vb.value = blocksize_;
+
+            drawFrame(offset_, shift_, blocksize_, reverse_, highlight_);
+        }
+
+        function drawFrame(offset, shift, blocksize, reverse, highlight) {
+            ctx.fillStyle = BG_COLOR;
+            ctx.fillRect(0, 0, W, H);
+
+            let cols = W / blocksize;
+            let current_char = offset;
+            let current_bit = offset * 8 + shift;
+
+            let c = 0;
+
+            for (let c = 0; c < cols; c++) {
+                for (let y = 0; y < H; y++) {
+                    for (let b = 0; b < blocksize; b++) {
+                        let char_idx = Math.floor(current_bit / 8)
+                        let byte = g_data.charCodeAt(char_idx);
+
+                        ctx.fillStyle = FG_COLOR;
+
+                        if (highlight) {
+                            if (printable_alpha.test(g_data[char_idx]))
+                                ctx.fillStyle = ALPHA_COLOR;
+                            else if (printable_num.test(g_data[char_idx]))
+                                ctx.fillStyle = NUM_COLOR;
+                        }
+
+                        let bit_pos = (current_bit & 7);
+                        let p = ((byte >> (reverse ? 7 - bit_pos : bit_pos)) & 1) === 1;
+
+                        let x = c * blocksize + b;
+
+
+                        if (p)
+                            ctx.fillRect(x, y, 1, 1);
+
+                        current_bit++;
+                    }
+                }
+            }
+        }
+
+        function readfile() {
+            var files = document.getElementById('files').files;
+
+            if (!files.length) {
+                alert('No file loaded');
+                return;
+            }
+
+            var file = files[0];
+
+            var reader = new FileReader();
+
+            reader.onloadend = function (evt) {
+                if (evt.target.readyState == FileReader.DONE) { // DONE == 2
+                    g_data = evt.target.result;
+
+                    // set range max value
+                    offset.setAttribute("max", g_data.length);
+
+                    // draw
+                    update();
+                }
+            };
+
+            reader.readAsBinaryString(file);
+        }
+
+    </script>
+
+
+
+
+</body>
+
+</html>
